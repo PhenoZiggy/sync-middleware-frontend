@@ -200,3 +200,85 @@ export interface DepartmentStatsState {
   error: string | null;
   selectedDepartments: number[];
 }
+
+// src/interfaces/employee.interface.ts - ADD these interfaces
+
+// Bulk Sync Response Interface
+export interface BulkSyncResponse {
+  success: boolean;
+  batchId: string;
+  totalRecords: number;
+  successCount: number;
+  failedCount: number;
+  ignoredCount: number;
+  unblockedEmployees?: number;
+  dateRange?: {
+    start: string;
+    end: string;
+  };
+  filters?: {
+    type: string;
+    includeBlocked: boolean;
+  };
+}
+
+// Date Range Sync Request Interface
+export interface DateRangeSyncRequest {
+  startDate: string;
+  endDate: string;
+  filterType?: 'all' | 'failed' | 'pending';
+  includeBlocked?: boolean;
+  triggeredBy?: string;
+}
+
+// Bulk Operation Status Interface
+export interface BulkOperationStatus {
+  id: string;
+  operationType: 'sync_pending' | 'retry_failed' | 'emergency_sync' | 'date_range_sync';
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  batchId?: string;
+  startedAt: string;
+  completedAt?: string;
+  totalRecords: number;
+  processedRecords: number;
+  successCount: number;
+  failedCount: number;
+  triggeredBy: string;
+  error?: string;
+}
+
+// Keep your existing interfaces and add these:
+
+export interface DepartmentStats {
+  id: number;
+  name: string;
+  employeeCount: number;
+  totalRecords: number;
+  syncedRecords: number;
+  failedRecords: number;
+  pendingRecords: number;
+  blockedEmployees: number;
+  lastSync: string | null;
+}
+
+export interface DepartmentStatsResponse {
+  success: boolean;
+  data: {
+    data: DepartmentStats[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface DepartmentStatsState {
+  departments: DepartmentStats[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  loading: boolean;
+  error: string | null;
+  selectedDepartments: number[];
+}

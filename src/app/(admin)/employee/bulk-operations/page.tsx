@@ -22,8 +22,8 @@ import {
   clearDepartmentSelection,
   setPage,
 } from '@/store/slices/departmentStatsSlice'
+import { bulkSyncAPI, BulkSyncResponse } from '@/services/api'
 
-// Sample employees data for individual selection (keep for now)
 const employeesData = [
   {
     id: 1,
@@ -37,10 +37,8 @@ const employeesData = [
     isBlocked: false,
     lastActivity: "2025-09-28T08:30:00Z"
   },
-  // ... rest of sample data
 ];
 
-// Sample running operations (keep for now)
 const runningOperations = [
   {
     id: 1,
@@ -59,6 +57,369 @@ const runningOperations = [
 ];
 
 interface Props {}
+
+// Confirmation Modal Component
+interface ConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  type?: 'info' | 'warning' | 'danger';
+}
+
+const ConfirmModal: React.FC<ConfirmModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
+  type = 'info'
+}) => {
+  const iconColors = {
+    info: 'text-blue-600',
+    warning: 'text-orange-600',
+    danger: 'text-red-600'
+  };
+
+  const icons = {
+    info: '❓',
+    warning: '⚠️',
+    danger: '🚨'
+  };
+
+  const buttonColors = {
+    info: 'bg-blue-600 hover:bg-blue-700',
+    warning: 'bg-orange-600 hover:bg-orange-700',
+    danger: 'bg-red-600 hover:bg-red-700'
+  };
+
+  return (
+    <Transition appear show={isOpen} as={Fragment}>
+      <Dialog as="div" className="relative z-50" onClose={onClose}>
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black bg-opacity-25" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
+                <div className="flex items-start gap-3">
+                  <div className={`text-3xl ${iconColors[type]}`}>
+                    {icons[type]}
+                  </div>
+                  <div className="flex-1">
+                    <Dialog.Title
+                      as="h3"
+                      className="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-2"
+                    >
+                      {title}
+                    </Dialog.Title>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-line">
+                        {message}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex gap-3">
+                  <button
+                    type="button"
+                    className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                    onClick={onClose}
+                  >
+                    {cancelText}
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${buttonColors[type]}`}
+                    onClick={() => {
+                      onConfirm();
+                      onClose();
+                    }}
+                  >
+                    {confirmText}
+                  </button>
+                </div>
+              </Dialog.Panel>
+            </Transition.Child>
+          </div>
+        </div>
+      </Dialog>
+    </Transition>
+  );
+};
+
+// Alert Modal Component
+interface AlertModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  title: string;
+  message: string;
+  type?: 'info' | 'warning' | 'error';
+}
+
+const AlertModal: React.FC<AlertModalProps> = ({
+  isOpen,
+  onClose,
+  title,
+  message,
+  type = 'info'
+}) => {
+  const iconColors = {
+    info: 'text-blue-600',
+    warning: 'text-yellow-600',
+    error: 'text-red-600'
+  };
+
+  const icons = {
+    info: 'ℹ️',
+    warning: '⚠️',
+    error: '❌'
+  };
+
+  return (
+    <Transition appear show={isOpen} as={Fragment}>
+      <Dialog as="div" className="relative z-50" onClose={onClose}>
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black bg-opacity-25" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
+                <div className="flex items-start gap-3">
+                  <div className={`text-3xl ${iconColors[type]}`}>
+                    {icons[type]}
+                  </div>
+                  <div className="flex-1">
+                    <Dialog.Title
+                      as="h3"
+                      className="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-2"
+                    >
+                      {title}
+                    </Dialog.Title>
+                    <div className="mt-2">
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        {message}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    onClick={onClose}
+                  >
+                    OK
+                  </button>
+                </div>
+              </Dialog.Panel>
+            </Transition.Child>
+          </div>
+        </div>
+      </Dialog>
+    </Transition>
+  );
+};
+
+// Emergency Confirmation Modal Component (Two-step confirmation)
+interface EmergencyConfirmModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}
+
+const EmergencyConfirmModal: React.FC<EmergencyConfirmModalProps> = ({
+  isOpen,
+  onClose,
+  onConfirm
+}) => {
+  const [step, setStep] = useState(1);
+
+  const handleClose = () => {
+    setStep(1);
+    onClose();
+  };
+
+  const handleFirstConfirm = () => {
+    setStep(2);
+  };
+
+  const handleFinalConfirm = () => {
+    onConfirm();
+    setStep(1);
+    onClose();
+  };
+
+  return (
+    <Transition appear show={isOpen} as={Fragment}>
+      <Dialog as="div" className="relative z-50" onClose={handleClose}>
+        <Transition.Child
+          as={Fragment}
+          enter="ease-out duration-300"
+          enterFrom="opacity-0"
+          enterTo="opacity-100"
+          leave="ease-in duration-200"
+          leaveFrom="opacity-100"
+          leaveTo="opacity-0"
+        >
+          <div className="fixed inset-0 bg-black bg-opacity-25" />
+        </Transition.Child>
+
+        <div className="fixed inset-0 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4 text-center">
+            <Transition.Child
+              as={Fragment}
+              enter="ease-out duration-300"
+              enterFrom="opacity-0 scale-95"
+              enterTo="opacity-100 scale-100"
+              leave="ease-in duration-200"
+              leaveFrom="opacity-100 scale-100"
+              leaveTo="opacity-0 scale-95"
+            >
+              <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white dark:bg-gray-800 p-6 text-left align-middle shadow-xl transition-all">
+                {step === 1 ? (
+                  <>
+                    <div className="flex items-start gap-3">
+                      <div className="text-4xl text-red-600">🚨</div>
+                      <div className="flex-1">
+                        <Dialog.Title
+                          as="h3"
+                          className="text-lg font-bold leading-6 text-red-900 dark:text-red-400 mb-2"
+                        >
+                          ⚠️ EMERGENCY SYNC WARNING ⚠️
+                        </Dialog.Title>
+                        <div className="mt-2">
+                          <div className="bg-red-50 dark:bg-red-900/20 border-2 border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+                            <p className="text-sm font-semibold text-red-900 dark:text-red-300 mb-2">
+                              This critical operation will:
+                            </p>
+                            <ul className="text-sm text-red-800 dark:text-red-300 space-y-1 list-disc list-inside">
+                              <li>Unblock ALL blocked employees</li>
+                              <li>Sync all records regardless of age</li>
+                              <li>Process both pending and failed records</li>
+                              <li>Generate high API traffic</li>
+                            </ul>
+                          </div>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 font-medium">
+                            This should only be used in critical situations.
+                          </p>
+                          <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 font-bold">
+                            Are you absolutely sure you want to proceed?
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 flex gap-3">
+                      <button
+                        type="button"
+                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                        onClick={handleClose}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+                        onClick={handleFirstConfirm}
+                      >
+                        Yes, Continue
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-3">
+                      <div className="text-4xl text-red-600 animate-pulse">⚠️</div>
+                      <div className="flex-1">
+                        <Dialog.Title
+                          as="h3"
+                          className="text-lg font-bold leading-6 text-red-900 dark:text-red-400 mb-2"
+                        >
+                          Final Confirmation Required
+                        </Dialog.Title>
+                        <div className="mt-2">
+                          <div className="bg-red-100 dark:bg-red-900/30 border-2 border-red-300 dark:border-red-700 rounded-lg p-4">
+                            <p className="text-sm font-bold text-red-900 dark:text-red-300 text-center">
+                              This action cannot be undone!
+                            </p>
+                            <p className="text-sm text-red-800 dark:text-red-300 text-center mt-2">
+                              Click "Execute Emergency Sync" to proceed with the emergency operation.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6 flex gap-3">
+                      <button
+                        type="button"
+                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                        onClick={handleClose}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-bold"
+                        onClick={handleFinalConfirm}
+                      >
+                        Execute Emergency Sync
+                      </button>
+                    </div>
+                  </>
+                )}
+              </Dialog.Panel>
+            </Transition.Child>
+          </div>
+        </div>
+      </Dialog>
+    </Transition>
+  );
+};
 
 const Page: NextPage<Props> = ({}) => {
   const dispatch = useAppDispatch();
@@ -81,15 +442,57 @@ const Page: NextPage<Props> = ({}) => {
   const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('all');
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
   const [operations, setOperations] = useState(runningOperations);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkSuccess, setBulkSuccess] = useState<BulkSyncResponse | null>(null);
   const [dateRange, setDateRange] = useState({
     startDate: '',
-    endDate: ''
+    endDate: '',
+    filterType: 'all' as 'all' | 'failed' | 'pending',
+    includeBlocked: false,
   });
+
+  // Modal states
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'info' | 'warning' | 'danger';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const [alertModal, setAlertModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    type?: 'info' | 'warning' | 'error';
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+  });
+
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   // Fetch department stats on mount
   useEffect(() => {
     dispatch(fetchDepartmentStats({ page, limit }));
   }, [dispatch, page, limit]);
+
+  // Auto-dismiss success message
+  useEffect(() => {
+    if (bulkSuccess) {
+      const timer = setTimeout(() => {
+        setBulkSuccess(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [bulkSuccess]);
 
   // Handlers
   const handleDepartmentSelect = (deptId: number) => {
@@ -121,13 +524,19 @@ const Page: NextPage<Props> = ({}) => {
   };
 
   const handleForceSyncDepartment = (departmentId: number) => {
-    if (confirm('This will override blocks and force sync. Continue?')) {
-      dispatch(forceSyncDepartment(departmentId)).then(() => {
-        setTimeout(() => {
-          dispatch(fetchDepartmentStats({ page, limit }));
-        }, 1000);
-      });
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: 'Force Sync Department',
+      message: 'This will override blocks and force sync. Continue?',
+      type: 'warning',
+      onConfirm: () => {
+        dispatch(forceSyncDepartment(departmentId)).then(() => {
+          setTimeout(() => {
+            dispatch(fetchDepartmentStats({ page, limit }));
+          }, 1000);
+        });
+      },
+    });
   };
 
   const handleSyncSelectedDepartments = () => {
@@ -140,6 +549,110 @@ const Page: NextPage<Props> = ({}) => {
 
   const handlePageChange = (newPage: number) => {
     dispatch(setPage(newPage));
+  };
+
+  // Bulk operation handlers
+  const handleSyncAllPending = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Sync All Pending Records',
+      message: 'This will sync all pending records across all employees. Continue?',
+      type: 'info',
+      onConfirm: async () => {
+        setBulkLoading(true);
+        setBulkError(null);
+        setBulkSuccess(null);
+
+        try {
+          const result = await bulkSyncAPI.syncAllPending('admin@company.com');
+          setBulkSuccess(result);
+          dispatch(fetchDepartmentStats({ page, limit }));
+        } catch (error: any) {
+          setBulkError(error.response?.data?.message || 'Failed to sync pending records');
+        } finally {
+          setBulkLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleRetryAllFailed = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Retry All Failed Records',
+      message: 'This will retry all failed sync records. Continue?',
+      type: 'warning',
+      onConfirm: async () => {
+        setBulkLoading(true);
+        setBulkError(null);
+        setBulkSuccess(null);
+
+        try {
+          const result = await bulkSyncAPI.retryAllFailed('admin@company.com');
+          setBulkSuccess(result);
+          dispatch(fetchDepartmentStats({ page, limit }));
+        } catch (error: any) {
+          setBulkError(error.response?.data?.message || 'Failed to retry failed records');
+        } finally {
+          setBulkLoading(false);
+        }
+      },
+    });
+  };
+
+  const handleEmergencySync = () => {
+    setShowEmergencyModal(true);
+  };
+
+  const executeEmergencySync = async () => {
+    setBulkLoading(true);
+    setBulkError(null);
+    setBulkSuccess(null);
+
+    try {
+      const result = await bulkSyncAPI.emergencySync('admin@company.com');
+      setBulkSuccess(result);
+      dispatch(fetchDepartmentStats({ page, limit }));
+    } catch (error: any) {
+      setBulkError(error.response?.data?.message || 'Failed to execute emergency sync');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleDateRangeSync = () => {
+    if (!dateRange.startDate || !dateRange.endDate) {
+      setAlertModal({
+        isOpen: true,
+        title: 'Missing Information',
+        message: 'Please select both start and end dates',
+        type: 'warning',
+      });
+      return;
+    }
+
+    setBulkLoading(true);
+    setBulkError(null);
+    setBulkSuccess(null);
+
+    bulkSyncAPI.dateRangeSync({
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
+      filterType: dateRange.filterType,
+      includeBlocked: dateRange.includeBlocked,
+      triggeredBy: 'admin@company.com',
+    })
+      .then((result) => {
+        setBulkSuccess(result);
+        setShowDateRangeModal(false);
+        dispatch(fetchDepartmentStats({ page, limit }));
+      })
+      .catch((error: any) => {
+        setBulkError(error.response?.data?.message || 'Failed to sync date range');
+      })
+      .finally(() => {
+        setBulkLoading(false);
+      });
   };
 
   const calculateSyncRate = (syncedRecords: number, totalRecords: number) => {
@@ -205,30 +718,101 @@ const Page: NextPage<Props> = ({}) => {
       <PageBreadcrumb pageTitle="Bulk Employee Operations" />
       
       <div className="space-y-6">
+        {/* Success/Error Messages */}
+        {bulkSuccess && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="text-green-600 text-2xl">✓</div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-green-900 mb-1">Sync Operation Completed</h3>
+                <div className="text-sm text-green-700 space-y-1">
+                  <div>Batch ID: <span className="font-mono">{bulkSuccess.batchId}</span></div>
+                  <div className="flex gap-4">
+                    <span>Total: {bulkSuccess.totalRecords}</span>
+                    <span className="text-green-600">✓ Success: {bulkSuccess.successCount}</span>
+                    <span className="text-red-600">✗ Failed: {bulkSuccess.failedCount}</span>
+                    {bulkSuccess.ignoredCount > 0 && (
+                      <span className="text-gray-600">⊘ Ignored: {bulkSuccess.ignoredCount}</span>
+                    )}
+                  </div>
+                  {bulkSuccess.unblockedEmployees && (
+                    <div className="text-orange-700">
+                      🔓 Unblocked {bulkSuccess.unblockedEmployees} employees
+                    </div>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={() => setBulkSuccess(null)}
+                className="text-green-600 hover:text-green-800"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
+        {bulkError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="text-red-600 text-2xl">⚠️</div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-red-900 mb-1">Operation Failed</h3>
+                <p className="text-sm text-red-700">{bulkError}</p>
+              </div>
+              <button
+                onClick={() => setBulkError(null)}
+                className="text-red-600 hover:text-red-800"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Quick Actions Header */}
         <ComponentCard title="Quick Bulk Actions">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button className="p-4 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg transition-colors group">
-              <div className="text-blue-600 text-2xl mb-2">🔄</div>
+            <button 
+              onClick={handleSyncAllPending}
+              disabled={bulkLoading}
+              className="p-4 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="text-blue-600 text-2xl mb-2">
+                {bulkLoading ? '⏳' : '🔄'}
+              </div>
               <h3 className="font-semibold text-blue-900 mb-1">Sync All Pending</h3>
               <p className="text-sm text-blue-700">Sync all pending records across all employees</p>
             </button>
             
-            <button className="p-4 bg-orange-50 hover:bg-orange-100 border-2 border-orange-200 rounded-lg transition-colors group">
-              <div className="text-orange-600 text-2xl mb-2">🔁</div>
+            <button 
+              onClick={handleRetryAllFailed}
+              disabled={bulkLoading}
+              className="p-4 bg-orange-50 hover:bg-orange-100 border-2 border-orange-200 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="text-orange-600 text-2xl mb-2">
+                {bulkLoading ? '⏳' : '🔁'}
+              </div>
               <h3 className="font-semibold text-orange-900 mb-1">Retry All Failed</h3>
               <p className="text-sm text-orange-700">Retry all failed sync records</p>
             </button>
             
-            <button className="p-4 bg-red-50 hover:bg-red-100 border-2 border-red-200 rounded-lg transition-colors group">
-              <div className="text-red-600 text-2xl mb-2">🚨</div>
+            <button 
+              onClick={handleEmergencySync}
+              disabled={bulkLoading}
+              className="p-4 bg-red-50 hover:bg-red-100 border-2 border-red-200 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <div className="text-red-600 text-2xl mb-2">
+                {bulkLoading ? '⏳' : '🚨'}
+              </div>
               <h3 className="font-semibold text-red-900 mb-1">Emergency Sync</h3>
               <p className="text-sm text-red-700">Override blocks and force sync all</p>
             </button>
             
             <button 
               onClick={() => setShowDateRangeModal(true)}
-              className="p-4 bg-green-50 hover:bg-green-100 border-2 border-green-200 rounded-lg transition-colors group"
+              disabled={bulkLoading}
+              className="p-4 bg-green-50 hover:bg-green-100 border-2 border-green-200 rounded-lg transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <div className="text-green-600 text-2xl mb-2">📅</div>
               <h3 className="font-semibold text-green-900 mb-1">Date Range Sync</h3>
@@ -521,9 +1105,9 @@ const Page: NextPage<Props> = ({}) => {
           </Tab.Panels>
         </Tab.Group>
 
-        {/* Date Range Modal - keep as is */}
+        {/* Date Range Modal */}
         <Transition appear show={showDateRangeModal} as={Fragment}>
-          <Dialog as="div" className="relative z-50" onClose={setShowDateRangeModal}>
+          <Dialog as="div" className="relative z-50" onClose={() => !bulkLoading && setShowDateRangeModal(false)}>
             <Transition.Child
               as={Fragment}
               enter="ease-out duration-300"
@@ -563,7 +1147,8 @@ const Page: NextPage<Props> = ({}) => {
                           type="date"
                           value={dateRange.startDate}
                           onChange={(e) => setDateRange(prev => ({ ...prev, startDate: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600 dark:bg-gray-700"
+                          disabled={bulkLoading}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600 dark:bg-gray-700 disabled:opacity-50"
                         />
                       </div>
                       <div>
@@ -574,38 +1159,61 @@ const Page: NextPage<Props> = ({}) => {
                           type="date"
                           value={dateRange.endDate}
                           onChange={(e) => setDateRange(prev => ({ ...prev, endDate: e.target.value }))}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600 dark:bg-gray-700"
+                          disabled={bulkLoading}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600 dark:bg-gray-700 disabled:opacity-50"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Scope
+                          Filter Type
                         </label>
-                        <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600 dark:bg-gray-700">
-                          <option>All Employees</option>
-                          <option>Failed Records Only</option>
-                          <option>Pending Records Only</option>
-                          <option>Include Blocked Employees</option>
+                        <select 
+                          value={dateRange.filterType}
+                          onChange={(e) => setDateRange(prev => ({ ...prev, filterType: e.target.value as 'all' | 'failed' | 'pending' }))}
+                          disabled={bulkLoading}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:border-gray-600 dark:bg-gray-700 disabled:opacity-50"
+                        >
+                          <option value="all">All Records (Pending & Failed)</option>
+                          <option value="pending">Pending Records Only</option>
+                          <option value="failed">Failed Records Only</option>
                         </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="includeBlocked"
+                          checked={dateRange.includeBlocked}
+                          onChange={(e) => setDateRange(prev => ({ ...prev, includeBlocked: e.target.checked }))}
+                          disabled={bulkLoading}
+                          className="rounded border-gray-300"
+                        />
+                        <label htmlFor="includeBlocked" className="text-sm text-gray-700 dark:text-gray-300">
+                          Include Blocked Employees (override blocks)
+                        </label>
+                      </div>
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                        <p className="text-xs text-yellow-800">
+                          <strong>Note:</strong> Bayzat API has a 7-day limitation. Records older than 7 days will be filtered during sync.
+                        </p>
                       </div>
                     </div>
 
                     <div className="mt-6 flex gap-3">
                       <button
                         type="button"
-                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+                        className="flex-1 px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50"
                         onClick={() => setShowDateRangeModal(false)}
+                        disabled={bulkLoading}
                       >
                         Cancel
                       </button>
                       <button
                         type="button"
-                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                        onClick={() => {
-                          setShowDateRangeModal(false);
-                        }}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        onClick={handleDateRangeSync}
+                        disabled={bulkLoading}
                       >
-                        Start Sync
+                        {bulkLoading ? 'Syncing...' : 'Start Sync'}
                       </button>
                     </div>
                   </Dialog.Panel>
@@ -614,6 +1222,32 @@ const Page: NextPage<Props> = ({}) => {
             </div>
           </Dialog>
         </Transition>
+
+        {/* Confirmation Modal */}
+        <ConfirmModal
+          isOpen={confirmModal.isOpen}
+          onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+          onConfirm={confirmModal.onConfirm}
+          title={confirmModal.title}
+          message={confirmModal.message}
+          type={confirmModal.type}
+        />
+
+        {/* Alert Modal */}
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={() => setAlertModal({ ...alertModal, isOpen: false })}
+          title={alertModal.title}
+          message={alertModal.message}
+          type={alertModal.type}
+        />
+
+        {/* Emergency Confirmation Modal */}
+        <EmergencyConfirmModal
+          isOpen={showEmergencyModal}
+          onClose={() => setShowEmergencyModal(false)}
+          onConfirm={executeEmergencySync}
+        />
 
         {/* Back to Employees Link */}
         <div className="flex justify-start">

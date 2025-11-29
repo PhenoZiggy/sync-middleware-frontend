@@ -1,9 +1,9 @@
-// src/services/api.ts
-
 import axios from 'axios';
+import { store } from '@/store';
+import { refreshAccessToken, clearCredentials } from '@/store/slices/authSlice';
 import { DepartmentStatsResponse, Employee, EmployeeDetailResponse, EmployeeLogsParams, EmployeeLogsResponse, EmployeesResponse, RecentLogsResponse } from '@/interfaces/employee.interface';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.25.71:8000';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // Create axios instance
 export const api = axios.create({
@@ -14,27 +14,95 @@ export const api = axios.create({
   timeout: 10000,
 });
 
-// Request interceptor (for auth tokens, etc.)
+// Request interceptor - Add auth token
 api.interceptors.request.use(
   (config) => {
-    // Add auth token if needed
-    // const token = localStorage.getItem('token');
-    // if (token) {
-    //   config.headers.Authorization = `Bearer ${token}`;
-    // }
+    const state = store.getState();
+    const token = state.auth.accessToken;
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Response interceptor (for error handling)
+// Response interceptor - Handle token refresh
+let isRefreshing = false;
+let failedQueue: any[] = [];
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token);
+    }
+  });
+
+  failedQueue = [];
+};
+
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    // Handle specific error codes
-    if (error.response?.status === 401) {
-      // Handle unauthorized
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If error is 401 and we haven't tried to refresh yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        // If already refreshing, queue this request
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
+      }
+
+      originalRequest._retry = true;
+      isRefreshing = true;
+
+      try {
+        // Attempt to refresh token
+        const resultAction = await store.dispatch(refreshAccessToken());
+
+        if (refreshAccessToken.fulfilled.match(resultAction)) {
+          const newToken = resultAction.payload;
+          processQueue(null, newToken);
+          originalRequest.headers.Authorization = `Bearer ${newToken}`;
+          return api(originalRequest);
+        } else {
+          // Refresh failed
+          processQueue(error, null);
+          store.dispatch(clearCredentials());
+          
+          // Redirect to login
+          if (typeof window !== 'undefined') {
+            window.location.href = '/signin';
+          }
+          
+          return Promise.reject(error);
+        }
+      } catch (err) {
+        processQueue(err, null);
+        store.dispatch(clearCredentials());
+        
+        // Redirect to login
+        if (typeof window !== 'undefined') {
+          window.location.href = '/signin';
+        }
+        
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
+      }
     }
+
     return Promise.reject(error);
   }
 );
@@ -81,7 +149,7 @@ export const employeeAPI = {
 
   // Sync all employees
   syncAllEmployees: async () => {
-    const response = await api.post('/attendance/sync-all');
+    const response = await api.post('attendance/fetch/trigger');
     return response.data;
   },
 
@@ -197,8 +265,67 @@ export const departmentAPI = {
     });
     return response.data;
   },
+
+
+  
 };
 
 
+export interface BulkSyncResponse {
+  success: boolean;
+  batchId: string;
+  totalRecords: number;
+  successCount: number;
+  failedCount: number;
+  ignoredCount: number;
+  unblockedEmployees?: number;
+  dateRange?: {
+    start: string;
+    end: string;
+  };
+  filters?: {
+    type: string;
+    includeBlocked: boolean;
+  };
+}
 
- 
+export interface DateRangeSyncRequest {
+  startDate: string;
+  endDate: string;
+  filterType?: 'all' | 'failed' | 'pending';
+  includeBlocked?: boolean;
+  triggeredBy?: string;
+}
+
+export const bulkSyncAPI = {
+  // Sync all pending records
+  syncAllPending: async (triggeredBy?: string) => {
+    const response = await api.post<BulkSyncResponse>('/bayzat/sync/pending', {
+      triggeredBy,
+    });
+    return response.data;
+  },
+
+  // Retry all failed records
+  retryAllFailed: async (triggeredBy?: string) => {
+    const response = await api.post<BulkSyncResponse>('/bayzat/sync/retry-failed', {
+      triggeredBy,
+    });
+    return response.data;
+  },
+
+  // Emergency sync - overrides all blocks
+  emergencySync: async (triggeredBy?: string) => {
+    const response = await api.post<BulkSyncResponse>('/bayzat/sync/emergency', {
+      triggeredBy,
+      confirmEmergency: true,
+    });
+    return response.data;
+  },
+
+  // Date range sync with filters
+  dateRangeSync: async (params: DateRangeSyncRequest) => {
+    const response = await api.post<BulkSyncResponse>('/bayzat/sync/date-range', params);
+    return response.data;
+  },
+};

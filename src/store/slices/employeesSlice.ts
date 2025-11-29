@@ -162,6 +162,7 @@ const employeesSlice = createSlice({
     // Sync employee
     builder
       .addCase(syncEmployee.pending, (state) => {
+        state.loading = true;
         state.error = null;
       })
       .addCase(syncEmployee.fulfilled, (state, action) => {
@@ -170,24 +171,29 @@ const employeesSlice = createSlice({
         if (employee) {
           employee.lastSyncStatus = 'pending';
         }
+        state.loading = false;
       })
       .addCase(syncEmployee.rejected, (state, action) => {
         state.error = action.payload as string;
+        state.loading = false;
       });
 
     // Sync all employees
     builder
       .addCase(syncAllEmployees.pending, (state) => {
+        state.loading = true;
         state.error = null;
       })
       .addCase(syncAllEmployees.fulfilled, (state) => {
         // Update all employees status
+        state.loading = false;
         state.employees.forEach(emp => {
           emp.lastSyncStatus = 'pending';
         });
       })
       .addCase(syncAllEmployees.rejected, (state, action) => {
         state.error = action.payload as string;
+        state.loading = false;
       });
 
     // Toggle block employee

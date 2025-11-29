@@ -24,6 +24,10 @@ import {
 import { fetchRecentLogs, retryLog } from '@/store/slices/recentLogsSlice'
 import { Employee } from '@/interfaces/employee.interface'
 
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { PermissionGate } from '@/components/auth/PermissionGate';
+import { PERMISSIONS } from '@/const/permissions';
+
 interface Props {}
 
 const Page: NextPage<Props> = ({}) => {
@@ -98,6 +102,7 @@ const Page: NextPage<Props> = ({}) => {
     dispatch(syncAllEmployees()).then(() => {
       setTimeout(() => {
         dispatch(fetchEmployees({ page, limit, search: searchTerm, filter: currentFilter }));
+        dispatch(fetchRecentLogs(5));
       }, 1000);
     });
   };
@@ -172,6 +177,7 @@ const Page: NextPage<Props> = ({}) => {
   }
 
   return (
+    <ProtectedRoute requiredPermissions={[PERMISSIONS.EMPLOYEES.READ]}>
     <div>
       <PageBreadcrumb pageTitle="Employees" />
       
@@ -189,6 +195,7 @@ const Page: NextPage<Props> = ({}) => {
           </div>
           
           <div className="flex gap-2">
+          <PermissionGate permissions={[PERMISSIONS.SYNC.MANUAL]}>
             <button 
               onClick={handleSyncAll}
               disabled={employeesLoading}
@@ -196,22 +203,28 @@ const Page: NextPage<Props> = ({}) => {
             >
               {employeesLoading ? 'Syncing...' : 'Sync All Employees'}
             </button>
-            <button 
-              onClick={() => dispatch(fetchEmployees({ page, limit, search: searchTerm, filter: currentFilter }))}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              Manual Fetch
-            </button>
-            {selectedEmployees.length > 0 && (
+          </PermissionGate>
+          <PermissionGate permissions={[PERMISSIONS.ATTENDANCE.FETCH]}>
               <button 
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
-                onClick={() => {
-                  selectedEmployees.forEach(id => handleSyncEmployee(id));
-                }}
+                onClick={() => dispatch(fetchEmployees({ page, limit, search: searchTerm, filter: currentFilter }))}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
               >
-                Sync Selected ({selectedEmployees.length})
+                Manual Fetch
               </button>
-            )}
+            </PermissionGate>
+
+            {selectedEmployees.length > 0 && (
+              <PermissionGate permissions={[PERMISSIONS.SYNC.MANUAL]}>
+                <button 
+                  className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+                  onClick={() => {
+                    selectedEmployees.forEach(id => handleSyncEmployee(id));
+                  }}
+                >
+                  Sync Selected ({selectedEmployees.length})
+                </button>
+              </PermissionGate>
+  )}
           </div>
         </div>
 
@@ -343,12 +356,14 @@ const Page: NextPage<Props> = ({}) => {
 
                           <TableCell className="px-4 py-3 text-start">
                             <div className="flex gap-2">
-                              <button 
-                                onClick={() => handleSyncEmployee(employee.id)}
-                                className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                              >
-                                Sync Employee
-                              </button>
+                        <PermissionGate permissions={[PERMISSIONS.SYNC.MANUAL]}>
+                          <button 
+                            onClick={() => handleSyncEmployee(employee.id)}
+                            className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                          >
+                            Sync Employee
+                          </button>
+                        </PermissionGate>
                               <button 
                                 className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
                                 onClick={() => window.location.href = `/employee/${employee.personCode}`}
@@ -356,20 +371,24 @@ const Page: NextPage<Props> = ({}) => {
                                 View Details
                               </button>
                               {employee.isBlocked && (
-                                <button 
-                                  onClick={() => handleToggleBlock(employee.id)}
-                                  className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-                                >
-                                  Unblock
-                                </button>
+                                <PermissionGate permissions={[PERMISSIONS.EMPLOYEES.UPDATE]}>
+                                  <button 
+                                    onClick={() => handleToggleBlock(employee.id)}
+                                    className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                                  >
+                                    Unblock
+                                  </button>
+                                </PermissionGate>
                               )}
-                              {employee.failedRecords > 0 && (
-                                <button 
-                                  onClick={() => handleRetryFailed(employee.id)}
-                                  className="px-3 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors"
-                                >
-                                  Retry Failed
-                                </button>
+                               {employee.failedRecords > 0 && (
+                                <PermissionGate permissions={[PERMISSIONS.SYNC.RETRY]}>
+                                  <button 
+                                    onClick={() => handleRetryFailed(employee.id)}
+                                    className="px-3 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors"
+                                  >
+                                    Retry Failed
+                                  </button>
+                                </PermissionGate>
                               )}
                             </div>
                           </TableCell>
@@ -528,6 +547,7 @@ const Page: NextPage<Props> = ({}) => {
         </ComponentCard>
       </div>
     </div>
+    </ProtectedRoute>
   );
 };
 

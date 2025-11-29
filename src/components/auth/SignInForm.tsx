@@ -1,15 +1,105 @@
 "use client";
+
 import Checkbox from "@/components/form/input/Checkbox";
 import Input from "@/components/form/input/InputField";
 import Label from "@/components/form/Label";
 import Button from "@/components/ui/button/Button";
 import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "@/icons";
 import Link from "next/link";
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { login, clearError } from "@/store/slices/authSlice";
 
 export default function SignInForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const dispatch = useAppDispatch();
+  const hasRedirected = useRef(false); // Prevent multiple redirects
+
+  // Redux state
+  const { loading, error, isAuthenticated } = useAppSelector((state) => state.auth);
+
+  // Form state
   const [showPassword, setShowPassword] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
+  const [formData, setFormData] = useState({
+    username: "",
+    password: "",
+  });
+
+  console.log('Auth state:', { loading, error, isAuthenticated, hasRedirected: hasRedirected.current });
+
+  // Clear error on unmount
+  useEffect(() => {
+    return () => {
+      dispatch(clearError());
+    };
+  }, [dispatch]);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.username || !formData.password) {
+      return;
+    }
+
+    // Prevent multiple submissions
+    if (hasRedirected.current) {
+      return;
+    }
+
+    try {
+      const resultAction = await dispatch(login(formData));
+
+      if (login.fulfilled.match(resultAction)) {
+        console.log('Login successful, redirecting...');
+        
+        hasRedirected.current = true;
+        
+        // Get redirect path
+        const from = searchParams.get('from') || '/';
+        console.log('Login successful');
+        console.log('Cookies:', document.cookie);
+        console.log('isAuthenticated:', isAuthenticated);
+        console.log('Redirecting to:', from);
+        // Small delay to ensure cookies are set
+        setTimeout(() => {
+          // Use router.replace to avoid back button issues
+          router.replace(from);
+          
+          // Fallback: force reload if router.replace doesn't work
+          setTimeout(() => {
+            if (window.location.pathname === '/signin') {
+              window.location.href = from;
+            }
+          }, 500);
+        }, 300);
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      hasRedirected.current = false;
+    }
+  };
+
+  // If already authenticated on page load, redirect immediately
+  useEffect(() => {
+    if (isAuthenticated && !hasRedirected.current) {
+      console.log('Already authenticated, redirecting...');
+      hasRedirected.current = true;
+      const from = searchParams.get('from') || '/';
+      router.replace(from);
+    }
+  }, [isAuthenticated, router, searchParams]);
+
   return (
     <div className="flex flex-col flex-1 lg:w-1/2 w-full">
       <div className="w-full max-w-md sm:pt-10 mx-auto mb-5">
@@ -28,12 +118,34 @@ export default function SignInForm() {
               Sign In
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Enter your email and password to sign in!
+              Enter your username and password to sign in!
             </p>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-start gap-2">
+                <div className="text-red-600 text-xl">⚠️</div>
+                <div className="flex-1">
+                  <p className="text-sm text-red-800">{error}</p>
+                </div>
+                <button
+                  onClick={() => dispatch(clearError())}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           <div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-5">
-              <button className="inline-flex items-center justify-center gap-3 py-3 text-sm font-normal text-gray-700 transition-colors bg-gray-100 rounded-lg px-7 hover:bg-gray-200 hover:text-gray-800 dark:bg-white/5 dark:text-white/90 dark:hover:bg-white/10">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-3 py-3 text-sm font-normal text-gray-700 transition-colors bg-gray-100 rounded-lg px-7 hover:bg-gray-200 hover:text-gray-800 dark:bg-white/5 dark:text-white/90 dark:hover:bg-white/10"
+              >
                 <svg
                   width="20"
                   height="20"
@@ -60,7 +172,10 @@ export default function SignInForm() {
                 </svg>
                 Sign in with Google
               </button>
-              <button className="inline-flex items-center justify-center gap-3 py-3 text-sm font-normal text-gray-700 transition-colors bg-gray-100 rounded-lg px-7 hover:bg-gray-200 hover:text-gray-800 dark:bg-white/5 dark:text-white/90 dark:hover:bg-white/10">
+              <button
+                type="button"
+                className="inline-flex items-center justify-center gap-3 py-3 text-sm font-normal text-gray-700 transition-colors bg-gray-100 rounded-lg px-7 hover:bg-gray-200 hover:text-gray-800 dark:bg-white/5 dark:text-white/90 dark:hover:bg-white/10"
+              >
                 <svg
                   width="21"
                   className="fill-current"
@@ -84,22 +199,35 @@ export default function SignInForm() {
                 </span>
               </div>
             </div>
-            <form>
+            <form onSubmit={handleSubmit}>
               <div className="space-y-6">
                 <div>
                   <Label>
-                    Email <span className="text-error-500">*</span>{" "}
+                    Username <span className="text-error-500">*</span>
                   </Label>
-                  <Input placeholder="info@gmail.com" type="email" />
+                  <Input
+                    name="username"
+                    placeholder="Enter your username"
+                    type="text"
+                    value={formData.username}
+                    onChange={handleInputChange}
+                    disabled={loading}
+                    required
+                  />
                 </div>
                 <div>
                   <Label>
-                    Password <span className="text-error-500">*</span>{" "}
+                    Password <span className="text-error-500">*</span>
                   </Label>
                   <div className="relative">
                     <Input
+                      name="password"
                       type={showPassword ? "text" : "password"}
                       placeholder="Enter your password"
+                      value={formData.password}
+                      onChange={handleInputChange}
+                      disabled={loading}
+                      required
                     />
                     <span
                       onClick={() => setShowPassword(!showPassword)}
@@ -128,8 +256,23 @@ export default function SignInForm() {
                   </Link>
                 </div>
                 <div>
-                  <Button className="w-full" size="sm">
-                    Sign in
+                  <Button 
+                    type="submit"
+                    className="w-full" 
+                    size="sm"
+                    disabled={loading || !formData.username || !formData.password || hasRedirected.current}
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Signing in...
+                      </span>
+                    ) : (
+                      'Sign in'
+                    )}
                   </Button>
                 </div>
               </div>
@@ -137,7 +280,7 @@ export default function SignInForm() {
 
             <div className="mt-5">
               <p className="text-sm font-normal text-center text-gray-700 dark:text-gray-400 sm:text-start">
-                Don&apos;t have an account? {""}
+                Don&apos;t have an account?{" "}
                 <Link
                   href="/signup"
                   className="text-brand-500 hover:text-brand-600 dark:text-brand-400"
