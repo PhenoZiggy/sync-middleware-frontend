@@ -15,13 +15,13 @@ export const useAuth = () => {
   // Check if user has any of the specified permissions
   const hasAnyPermission = (permissions: string[]) => {
     if (!user) return false;
-    return permissions.some((permission) => user.permissions.includes(permission));
+    return permissions.some((permission) => user.permissions?.includes(permission));
   };
 
   // Check if user has all specified permissions
   const hasAllPermissions = (permissions: string[]) => {
     if (!user) return false;
-    return permissions.every((permission) => user.permissions.includes(permission));
+    return permissions.every((permission) => user.permissions?.includes(permission));
   };
 
   // Check if user has specific role

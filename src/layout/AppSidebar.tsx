@@ -37,7 +37,12 @@ const navItems: NavItem[] = [
     name: "Employees",
     subItems: [{ name: "List", path: "/employee", pro: false },{ name: "Bulk  Operations", path: "/employee/bulk-operations", pro: false }],
   },
-  
+  {
+    icon: <GridIcon />,
+    name: "Areas & Devices",
+    path: "/areas",
+  },
+
   // {
   //   icon: <CalenderIcon />,
   //   name: "Calendar",
