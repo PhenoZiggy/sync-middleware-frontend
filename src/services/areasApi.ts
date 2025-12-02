@@ -46,4 +46,32 @@ export const areasAPI = {
     const response = await api.get<DevicesResponse>(`/hikconnect/areas/${areaId}/devices`);
     return response.data;
   },
+
+  // Update device settings
+  updateDeviceSettings: async (
+    deviceId: string,
+    storeAttendance?: boolean,
+    pushToBayzat?: boolean,
+    notes?: string
+  ) => {
+    const response = await api.post(`/hikconnect/devices/${deviceId}/settings`, {
+      storeAttendance,
+      pushToBayzat,
+      notes,
+      updatedBy: 'admin', // You can get this from auth context
+    });
+    return response.data;
+  },
+
+  // Get device settings
+  getDeviceSettings: async (deviceId: string) => {
+    const response = await api.get(`/hikconnect/devices/${deviceId}/settings`);
+    return response.data;
+  },
+
+  // Initialize all device settings
+  initializeDeviceSettings: async () => {
+    const response = await api.post('/hikconnect/devices/settings/initialize');
+    return response.data;
+  },
 };

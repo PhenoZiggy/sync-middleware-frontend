@@ -27,6 +27,18 @@ export interface Device {
   port: number | null;
   isOnline: boolean;
   lastSyncedAt: Date | null;
+  settings?: DeviceSettings;
+}
+
+export interface DeviceSettings {
+  id: string;
+  deviceId: string;
+  storeAttendance: boolean;
+  pushToBayzat: boolean;
+  notes: string | null;
+  updatedBy: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface AreasResponse {
